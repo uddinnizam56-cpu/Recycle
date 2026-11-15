@@ -1,0 +1,359 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------------
+    // Global Hardened Helpers
+    // ---------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrapAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'nizamaazuddin@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin() ||
+        (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ---------------------------------------------------------------------
+    // Entity Validation Blueprints (strict keys, types, sizes, regexes)
+    // ---------------------------------------------------------------------
+    function isValidUserPublic(data) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'role', 'walletBalance',
+          'ecoRewardPoints', 'totalRecycledKg', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'role', 'walletBalance',
+          'ecoRewardPoints', 'totalRecycledKg', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.role in ['customer', 'executive', 'business', 'admin']
+        && data.walletBalance is number && data.walletBalance >= 0
+        && data.ecoRewardPoints is number && data.ecoRewardPoints >= 0
+        && data.totalRecycledKg is number && data.totalRecycledKg >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivate(data) {
+      return data.keys().hasAll(['uid', 'email', 'phone', 'area', 'city', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'phone', 'area', 'city', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.phone is string && data.phone.size() <= 32
+        && data.area is string && data.area.size() <= 100
+        && data.city is string && data.city.size() <= 80
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'grantedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'grantedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.grantedAt is timestamp;
+    }
+
+    function isValidScrapRate(data) {
+      return data.keys().hasAll([
+          'id', 'category', 'name', 'rate', 'unit',
+          'co2Offset', 'minQty', 'updatedByUid', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'category', 'name', 'rate', 'unit',
+          'co2Offset', 'minQty', 'updatedByUid', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.category is string && data.category.size() >= 1 && data.category.size() <= 60
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.rate is number && data.rate >= 0
+        && data.unit in ['kg', 'piece']
+        && data.co2Offset is number && data.co2Offset >= 0
+        && data.minQty is string && data.minQty.size() >= 1 && data.minQty.size() <= 40
+        && isValidId(data.updatedByUid)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPickupOrder(data) {
+      return data.keys().hasAll([
+          'id', 'orderNumber', 'ownerUid', 'customerName', 'area', 'city',
+          'status', 'scheduledDate', 'timeSlot', 'totalEstimatedAmount',
+          'finalAmount', 'paymentMethod', 'itemsSummary', 'co2SavedTotal',
+          'rating', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'orderNumber', 'ownerUid', 'customerName', 'area', 'city',
+          'status', 'scheduledDate', 'timeSlot', 'totalEstimatedAmount',
+          'finalAmount', 'paymentMethod', 'itemsSummary', 'co2SavedTotal',
+          'rating', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.orderNumber is string && data.orderNumber.size() >= 3 && data.orderNumber.size() <= 40
+        && isValidId(data.ownerUid)
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 100
+        && data.area is string && data.area.size() >= 1 && data.area.size() <= 100
+        && data.city is string && data.city.size() >= 1 && data.city.size() <= 80
+        && data.status in ['requested', 'assigned', 'en_route', 'arrived', 'weighing', 'completed', 'cancelled']
+        && data.scheduledDate is string && data.scheduledDate.size() >= 4 && data.scheduledDate.size() <= 40
+        && data.timeSlot is string && data.timeSlot.size() >= 3 && data.timeSlot.size() <= 60
+        && data.totalEstimatedAmount is number && data.totalEstimatedAmount >= 0
+        && data.finalAmount is number && data.finalAmount >= 0
+        && data.paymentMethod in ['UPI', 'Cash', 'PunarChakra Wallet']
+        && data.itemsSummary is string && data.itemsSummary.size() >= 1 && data.itemsSummary.size() <= 500
+        && data.co2SavedTotal is number && data.co2SavedTotal >= 0
+        && data.rating is number && data.rating >= 0 && data.rating <= 5
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'actorName', 'actionType', 'summary',
+          'details', 'materialId', 'quantity', 'estimatedValue', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerUid', 'actorName', 'actionType', 'summary',
+          'details', 'materialId', 'quantity', 'estimatedValue', 'createdAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.ownerUid)
+        && data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100
+        && data.actionType in [
+          'PICKUP_SCHEDULED', 'ORDER_STATUS_UPDATED', 'AI_PHOTO_SCAN',
+          'AR_SPATIAL_SCAN', 'RECYCLING_TIP_ADDED', 'WALLET_WITHDRAWAL',
+          'VOUCHER_REDEEMED', 'RATE_UPDATED', 'FORM_CREATED'
+        ]
+        && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 200
+        && data.details is string && data.details.size() <= 500
+        && data.materialId is string && data.materialId.size() <= 80
+        && data.quantity is number && data.quantity >= 0
+        && data.estimatedValue is number && data.estimatedValue >= 0
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFormRecord(data) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'title', 'responderUri', 'webViewLink',
+          'templateType', 'responseCount', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerUid', 'title', 'responderUri', 'webViewLink',
+          'templateType', 'responseCount', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.ownerUid)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.responderUri is string && data.responderUri.size() <= 400
+        && data.webViewLink is string && data.webViewLink.size() <= 400
+        && data.templateType in ['pickup_feedback', 'cleanup_volunteer', 'b2b_bulk_intake', 'custom']
+        && data.responseCount is number && data.responseCount >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // ---------------------------------------------------------------------
+    // Collection Rules
+    // ---------------------------------------------------------------------
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isBootstrapAdmin());
+
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserPublic(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().uid == userId
+        && (incoming().role == 'customer' || isAdmin())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserPublic(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'walletBalance', 'ecoRewardPoints', 'totalRecycledKg', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isAdmin() && isValidId(userId);
+
+      // Isolated PII subcollection
+      match /private/{docId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(docId)
+          && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isBootstrapAdmin());
+
+        allow create: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isValidUserPrivate(incoming())
+          && incoming().uid == userId
+          && (isOwner(userId) || isAdmin())
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isValidUserPrivate(incoming())
+          && incoming().uid == existing().uid
+          && (isOwner(userId) || isAdmin())
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'email', 'phone', 'area', 'city', 'updatedAt'
+          ]);
+
+        allow delete: if isAdmin() && isValidId(userId) && isValidId(docId);
+      }
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (isOwner(adminUid) || isAdmin());
+      allow create, update, delete: if isBootstrapAdmin()
+        && isValidId(adminUid)
+        && isValidAdminRecord(incoming())
+        && incoming().uid == adminUid
+        && incoming().grantedAt == request.time;
+    }
+
+    match /scrap_rates/{itemId} {
+      allow get: if isSignedIn() && isValidId(itemId);
+      allow list: if isSignedIn();
+      allow create, update: if isAdmin()
+        && isValidId(itemId)
+        && isValidScrapRate(incoming())
+        && incoming().id == itemId
+        && incoming().updatedByUid == request.auth.uid
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(itemId);
+    }
+
+    match /pickup_orders/{orderId} {
+      allow get: if isSignedIn() && isValidId(orderId)
+        && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (resource.data.ownerUid == request.auth.uid || isBootstrapAdmin());
+
+      allow create: if isVerifiedUser()
+        && isValidId(orderId)
+        && isValidPickupOrder(incoming())
+        && incoming().id == orderId
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(orderId)
+        && isValidPickupOrder(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            existing().ownerUid == request.auth.uid && (
+              // Action 1: Owner rate completed order
+              (existing().status == 'completed'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'updatedAt'])) ||
+              // Action 2: Owner cancel pending order before completion
+              (!(existing().status in ['completed', 'cancelled'])
+                && incoming().status == 'cancelled'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+            )
+          )
+        );
+
+      allow delete: if isAdmin() && isValidId(orderId);
+    }
+
+    match /activity_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId)
+        && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (resource.data.ownerUid == request.auth.uid || isBootstrapAdmin());
+
+      allow create: if isVerifiedUser()
+        && isValidId(logId)
+        && isValidActivityLog(incoming())
+        && incoming().id == logId
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time;
+
+      allow delete: if isAdmin() && isValidId(logId);
+    }
+
+    match /form_records/{formId} {
+      allow get: if isSignedIn() && isValidId(formId)
+        && (existing().ownerUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (resource.data.ownerUid == request.auth.uid || isBootstrapAdmin());
+
+      allow create: if isVerifiedUser()
+        && isValidId(formId)
+        && isValidFormRecord(incoming())
+        && incoming().id == formId
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(formId)
+        && isValidFormRecord(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (isAdmin() || (
+          existing().ownerUid == request.auth.uid
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'responseCount', 'updatedAt'
+          ])
+        ));
+
+      allow delete: if isValidId(formId) && (isAdmin() || (isVerifiedUser() && existing().ownerUid == request.auth.uid));
+    }
+  }
+}

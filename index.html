@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PunarChakra - Smart Green Recycling & Scrap Pickup Platform</title>
+    <meta name="description" content="Smart Green Recycling & Scrap Pickup Platform with Multilingual support, AI scrap classifier, real-time GPS tracking, and executive/admin management." />
+    <meta property="og:title" content="PunarChakra - Smart Green Recycling & Scrap Pickup Platform" />
+    <meta property="og:description" content="Smart Green Recycling & Scrap Pickup Platform with Multilingual support, AI scrap classifier, real-time GPS tracking, and executive/admin management." />
+    <script>
+      // 1. Intercept Vite HMR WebSocket in preview/iframe environment where WebSockets are unavailable
+      (function() {
+        if (typeof window === 'undefined') return;
+        var RealWebSocket = window.WebSocket;
+        if (!RealWebSocket) return;
+
+        window.WebSocket = function(url, protocols) {
+          var isViteHmr =
+            protocols === 'vite-hmr' ||
+            protocols === 'vite-ping' ||
+            (Array.isArray(protocols) && (protocols.indexOf('vite-hmr') !== -1 || protocols.indexOf('vite-ping') !== -1)) ||
+            (typeof url === 'string' && (url.indexOf('token=') !== -1 || url.indexOf('vite') !== -1));
+
+          if (isViteHmr) {
+            var target = new EventTarget();
+            target.url = url || '';
+            target.readyState = 1; // WebSocket.OPEN
+            target.CONNECTING = 0;
+            target.OPEN = 1;
+            target.CLOSING = 2;
+            target.CLOSED = 3;
+            target.binaryType = 'blob';
+            target.bufferedAmount = 0;
+            target.extensions = '';
+            target.protocol = typeof protocols === 'string' ? protocols : 'vite-hmr';
+            target.send = function() {};
+            target.close = function() {
+              target.readyState = 3;
+            };
+            setTimeout(function() {
+              try {
+                target.dispatchEvent(new Event('open'));
+              } catch (_) {}
+            }, 0);
+            return target;
+          }
+          return new RealWebSocket(url, protocols);
+        };
+
+        window.WebSocket.prototype = RealWebSocket.prototype;
+        window.WebSocket.CONNECTING = RealWebSocket.CONNECTING;
+        window.WebSocket.OPEN = RealWebSocket.OPEN;
+        window.WebSocket.CLOSING = RealWebSocket.CLOSING;
+        window.WebSocket.CLOSED = RealWebSocket.CLOSED;
+
+        // 2. Filter out console.error noise from Vite client socket fallback
+        var origConsoleError = console.error;
+        console.error = function() {
+          var msg = arguments && arguments[0];
+          if (
+            typeof msg === 'string' &&
+            (msg.indexOf('[vite] failed to connect to websocket') !== -1 ||
+             msg.indexOf('WebSocket closed without opened') !== -1)
+          ) {
+            return;
+          }
+          if (msg && msg.message && typeof msg.message === 'string' && msg.message.indexOf('WebSocket') !== -1) {
+            return;
+          }
+          return origConsoleError.apply(console, arguments);
+        };
+
+        // 3. Catch and suppress any unhandled rejections from @vite/client
+        window.addEventListener('unhandledrejection', function(event) {
+          if (
+            event.reason &&
+            ((typeof event.reason.message === 'string' &&
+              (event.reason.message.indexOf('WebSocket') !== -1 || event.reason.indexOf && event.reason.indexOf('vite') !== -1)) ||
+              (typeof event.reason.stack === 'string' && event.reason.stack.indexOf('@vite/client') !== -1))
+          ) {
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+            if (typeof event.stopPropagation === 'function') event.stopPropagation();
+          }
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

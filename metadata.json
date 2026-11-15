@@ -1,0 +1,12 @@
+{
+  "name": "Remix Test PunarChakra",
+  "description": "Smart Green Recycling \u0026 Scrap Pickup Platform with Multilingual support, AI scrap classifier, real-time GPS tracking, and executive/admin management.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
